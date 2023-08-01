@@ -50,6 +50,18 @@ pub struct Note {
     octave: i8,
 }
 
+impl PartialOrd for Note {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Note {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        return self.semitone_value().cmp(&other.semitone_value());
+    }
+}
+
 // NoteLetter represents one of the 7 note letters.
 //
 // Arithmetic on NoteLetters is necessary to spell notes derived from intervals correctly. For
