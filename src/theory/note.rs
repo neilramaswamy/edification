@@ -1,3 +1,6 @@
+use regex::Regex;
+use std::str::FromStr;
+
 use crate::theory::interval::Interval;
 
 use num_derive::FromPrimitive;
@@ -21,6 +24,26 @@ impl NoteAccidental {
             NoteAccidental::Sharp => 1,
             NoteAccidental::DoubleFlat => -2,
             NoteAccidental::DoubleSharp => 2,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum NoteAccidentalParseError {
+    InvalidAccidental,
+}
+
+impl FromStr for NoteAccidental {
+    type Err = NoteAccidentalParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "♭♭" | "bb" => Ok(NoteAccidental::DoubleFlat),
+            "♭" | "b" => Ok(NoteAccidental::Flat),
+            "" => Ok(NoteAccidental::None),
+            "♯" | "#" => Ok(NoteAccidental::Sharp),
+            "♯♯" | "×" | "##" => Ok(NoteAccidental::DoubleSharp),
+            _ => Err(NoteAccidentalParseError::InvalidAccidental),
         }
     }
 }
@@ -123,6 +146,28 @@ impl ToString for NoteLetter {
     }
 }
 
+#[derive(Debug)]
+pub enum NoteLetterParseError {
+    ProvideCapitalLetterAThroughG,
+}
+
+impl FromStr for NoteLetter {
+    type Err = NoteLetterParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "A" => Ok(NoteLetter::A),
+            "B" => Ok(NoteLetter::B),
+            "C" => Ok(NoteLetter::C),
+            "D" => Ok(NoteLetter::D),
+            "E" => Ok(NoteLetter::E),
+            "F" => Ok(NoteLetter::F),
+            "G" => Ok(NoteLetter::G),
+            _ => Err(NoteLetterParseError::ProvideCapitalLetterAThroughG),
+        }
+    }
+}
+
 impl Note {
     // Create a Note from a letter and accidental, with a default octave.
     pub fn new(letter: NoteLetter, accidental: NoteAccidental) -> Note {
@@ -185,6 +230,12 @@ impl Note {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum NoteParseError {
+    InvalidFormat,
+    OutOfRange,
+}
+
 impl ToString for Note {
     fn to_string(&self) -> String {
         let mut note_str = String::with_capacity(5);
@@ -194,6 +245,34 @@ impl ToString for Note {
         note_str += &self.octave.to_string();
 
         note_str
+    }
+}
+
+impl FromStr for Note {
+    type Err = NoteParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let re = Regex::new(r"^([A-G])(b|bb|♭|♭♭|#|##|♯|♯♯|×)?([0-8])?$").unwrap();
+
+        match re.captures(s) {
+            // TODO(neil): Consider giving more ergonomic error messages
+            None => Err(NoteParseError::InvalidFormat),
+            Some(captures) => {
+                let letter = NoteLetter::from_str(captures.get(1).unwrap().as_str()).unwrap();
+                let accidental = dbg!(captures.get(2)).map_or(NoteAccidental::None, |m| {
+                    NoteAccidental::from_str(m.as_str()).unwrap()
+                });
+                let octave = captures
+                    .get(3)
+                    .map_or(4, |m| m.as_str().parse::<i8>().unwrap());
+
+                Ok(Note {
+                    letter,
+                    accidental,
+                    octave,
+                })
+            }
+        }
     }
 }
 
@@ -237,5 +316,196 @@ mod tests {
         assert_eq!(f.apply_interval(&MIN6).to_string(), "Db5");
         assert_eq!(f.apply_interval(&MIN7).to_string(), "Eb5");
         assert_eq!(f.apply_interval(&OCT1).to_string(), "F5");
+    }
+
+    #[test]
+    fn str_to_note() {
+        // Note, no accidentals
+        let c = "C";
+        let d = "D";
+
+        assert_eq!(
+            Note::from_str(c).unwrap(),
+            Note {
+                letter: NoteLetter::C,
+                accidental: NoteAccidental::None,
+                octave: 4
+            }
+        );
+
+        assert_eq!(
+            Note::from_str(d).unwrap(),
+            Note {
+                letter: NoteLetter::D,
+                accidental: NoteAccidental::None,
+                octave: 4,
+            }
+        );
+
+        // Note, accidental
+        let eb = "Eb";
+        let fb = "F♭";
+        let gs = "G#";
+        let ash = "A♯";
+
+        assert_eq!(
+            Note::from_str(eb).unwrap(),
+            Note {
+                letter: NoteLetter::E,
+                accidental: NoteAccidental::Flat,
+                octave: 4,
+            }
+        );
+
+        assert_eq!(
+            Note::from_str(fb).unwrap(),
+            Note {
+                letter: NoteLetter::F,
+                accidental: NoteAccidental::Flat,
+                octave: 4,
+            }
+        );
+
+        assert_eq!(
+            Note::from_str(gs).unwrap(),
+            Note {
+                letter: NoteLetter::G,
+                accidental: NoteAccidental::Sharp,
+                octave: 4,
+            }
+        );
+
+        assert_eq!(
+            Note::from_str(ash).unwrap(),
+            Note {
+                letter: NoteLetter::A,
+                accidental: NoteAccidental::Sharp,
+                octave: 4,
+            }
+        );
+
+        // Note, double accidental
+        let gbb = "Gbb";
+        let bss = "B##";
+        let bssx = "B×";
+        let css = "C♯♯";
+
+        assert_eq!(
+            Note::from_str(gbb).unwrap(),
+            Note {
+                letter: NoteLetter::G,
+                accidental: NoteAccidental::DoubleFlat,
+                octave: 4,
+            }
+        );
+
+        assert_eq!(
+            Note::from_str(bss).unwrap(),
+            Note {
+                letter: NoteLetter::B,
+                accidental: NoteAccidental::DoubleSharp,
+                octave: 4,
+            }
+        );
+
+        assert_eq!(
+            Note::from_str(bssx).unwrap(),
+            Note {
+                letter: NoteLetter::B,
+                accidental: NoteAccidental::DoubleSharp,
+                octave: 4,
+            }
+        );
+
+        assert_eq!(
+            Note::from_str(css).unwrap(),
+            Note {
+                letter: NoteLetter::C,
+                accidental: NoteAccidental::DoubleSharp,
+                octave: 4,
+            }
+        );
+
+        // Note octave
+        let a0 = "A0";
+        let c1 = "C1";
+        let b7 = "B7";
+
+        assert_eq!(
+            Note::from_str(a0).unwrap(),
+            Note {
+                letter: NoteLetter::A,
+                accidental: NoteAccidental::None,
+                octave: 0,
+            }
+        );
+
+        assert_eq!(
+            Note::from_str(c1).unwrap(),
+            Note {
+                letter: NoteLetter::C,
+                accidental: NoteAccidental::None,
+                octave: 1,
+            }
+        );
+
+        assert_eq!(
+            Note::from_str(b7).unwrap(),
+            Note {
+                letter: NoteLetter::B,
+                accidental: NoteAccidental::None,
+                octave: 7,
+            }
+        );
+
+        // Note, accidental, octave
+        let as_4 = "A#4";
+        let bb_7 = "B♭7";
+
+        assert_eq!(
+            Note::from_str(as_4).unwrap(),
+            Note {
+                letter: NoteLetter::A,
+                accidental: NoteAccidental::Sharp,
+                octave: 4,
+            }
+        );
+
+        assert_eq!(
+            Note::from_str(bb_7).unwrap(),
+            Note {
+                letter: NoteLetter::B,
+                accidental: NoteAccidental::Flat,
+                octave: 7,
+            }
+        );
+
+        // Note, double accidental, octave
+        let fbb2 = "Fbb2";
+        let bss7 = "B##7";
+
+        assert_eq!(
+            Note::from_str(fbb2).unwrap(),
+            Note {
+                letter: NoteLetter::F,
+                accidental: NoteAccidental::DoubleFlat,
+                octave: 2,
+            }
+        );
+
+        assert_eq!(
+            Note::from_str(bss7).unwrap(),
+            Note {
+                letter: NoteLetter::B,
+                accidental: NoteAccidental::DoubleSharp,
+                octave: 7,
+            }
+        );
+    }
+
+    #[test]
+    fn invalid_str_to_note() {
+        let hs = "H#";
+        assert_eq!(Note::from_str(hs), Err(NoteParseError::InvalidFormat))
     }
 }
