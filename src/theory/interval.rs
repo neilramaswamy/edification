@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub enum IntervalQuality {
     Perfect,
     Major,
@@ -7,6 +8,7 @@ pub enum IntervalQuality {
 }
 
 // Interval is only ascending, for now.
+#[derive(Debug)]
 pub struct Interval {
     pub quality: IntervalQuality,
     pub number: i8,

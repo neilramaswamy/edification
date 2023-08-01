@@ -4,7 +4,7 @@ use num_derive::FromPrimitive;
 
 use super::scale::Scale;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum NoteAccidental {
     None,
     Flat,
@@ -37,7 +37,7 @@ impl ToString for NoteAccidental {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Note {
     // The letter of the note, like A/B/C
     letter: NoteLetter,
@@ -56,7 +56,7 @@ pub struct Note {
 // example, a minor third applied to Db is Fb, not E; the way you get the F in Fb is by going "up"
 // three note letters from Db. Critically, you can't use semitones for this task. For this reason,
 // we derive FromPrimitive to make arithmetic easier.
-#[derive(FromPrimitive, Copy, Clone)]
+#[derive(FromPrimitive, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum NoteLetter {
     C,
     D,
@@ -70,14 +70,13 @@ pub enum NoteLetter {
 impl NoteLetter {
     fn semitone_offset(&self) -> i8 {
         match self {
-            C => 0,
-            D => 2,
-            E => 4,
-            F => 5,
-            G => 7,
-            A => 9,
-            B => 11,
-            _ => panic!("Received incorrect NoteLetter"),
+            NoteLetter::C => 0,
+            NoteLetter::D => 2,
+            NoteLetter::E => 4,
+            NoteLetter::F => 5,
+            NoteLetter::G => 7,
+            NoteLetter::A => 9,
+            NoteLetter::B => 11,
         }
     }
 
@@ -134,7 +133,7 @@ impl Note {
     }
 
     fn semitone_value(&self) -> i8 {
-        let octave_offset = 7 * self.octave;
+        let octave_offset = 12 * self.octave;
         return octave_offset + self.letter.semitone_offset() + self.accidental.semitone_offset();
     }
 
@@ -159,8 +158,8 @@ impl Note {
             0 => (),
             1 => new_note.accidental = NoteAccidental::Sharp,
             2 => new_note.accidental = NoteAccidental::DoubleSharp,
-            _ => panic!(
-                "All new notes should be within a double flat/sharp of their intended interval"
+            i => panic!(
+                "All new notes should be within a double flat/sharp of their intended interval, received {i}"
             ),
         }
 
@@ -168,8 +167,8 @@ impl Note {
     }
 
     fn get_semitone_distance(&self, other: &Self) -> i8 {
-        let our_value = self.semitone_value();
-        let other_value = other.semitone_value();
+        let our_value = dbg!(self.semitone_value());
+        let other_value = dbg!(other.semitone_value());
         return our_value - other_value;
     }
 }
@@ -183,5 +182,48 @@ impl ToString for Note {
         note_str += &self.octave.to_string();
 
         note_str
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::theory::{
+        interval::{MAJ2, MAJ3, MIN3, MIN6, MIN7, OCT1, PERF1, PERF4, PERF5},
+        scale::MIXO_FLAT13,
+    };
+
+    use super::*;
+
+    // Test that we can create notes, stringify them, and apply intervals correctly, and
+    // generate a scale.
+
+    #[test]
+    fn test_notes_stringify() {
+        let c4 = Note::new(NoteLetter::C, NoteAccidental::None);
+        assert_eq!(c4.to_string(), "C4");
+
+        let fbb = Note::new(NoteLetter::F, NoteAccidental::DoubleFlat);
+        assert_eq!(fbb.to_string(), "Fbb4")
+    }
+
+    #[test]
+    fn test_intervals() {
+        let db = Note::new(NoteLetter::D, NoteAccidental::Flat);
+        assert_eq!(db.apply_interval(&MIN3).to_string(), "Fb4");
+
+        let cs = Note::new(NoteLetter::C, NoteAccidental::Sharp);
+        assert_eq!(cs.apply_interval(&MIN3).to_string(), "E4");
+
+        let f = Note::new(NoteLetter::F, NoteAccidental::None);
+
+        // Use a scale to test: this is Mixob13
+        assert_eq!(f.apply_interval(&PERF1).to_string(), "F4");
+        assert_eq!(f.apply_interval(&MAJ2).to_string(), "G4");
+        assert_eq!(f.apply_interval(&MAJ3).to_string(), "A4");
+        assert_eq!(f.apply_interval(&PERF4).to_string(), "Bb4");
+        assert_eq!(f.apply_interval(&PERF5).to_string(), "C5");
+        assert_eq!(f.apply_interval(&MIN6).to_string(), "Db5");
+        assert_eq!(f.apply_interval(&MIN7).to_string(), "Eb5");
+        assert_eq!(f.apply_interval(&OCT1).to_string(), "F5");
     }
 }
