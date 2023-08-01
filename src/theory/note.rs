@@ -4,7 +4,8 @@ use num_derive::FromPrimitive;
 
 use super::scale::Scale;
 
-enum NoteAccidental {
+#[derive(Clone, Copy)]
+pub enum NoteAccidental {
     None,
     Flat,
     Sharp,
@@ -16,10 +17,10 @@ impl NoteAccidental {
     fn semitone_offset(&self) -> i8 {
         match self {
             NoteAccidental::None => 0,
-            Flat => -1,
-            Sharp => 1,
-            DoubleFlat => -2,
-            DoubleSharp => 2,
+            NoteAccidental::Flat => -1,
+            NoteAccidental::Sharp => 1,
+            NoteAccidental::DoubleFlat => -2,
+            NoteAccidental::DoubleSharp => 2,
         }
     }
 }
@@ -28,14 +29,15 @@ impl ToString for NoteAccidental {
     fn to_string(&self) -> String {
         match self {
             NoteAccidental::None => "".to_string(),
-            Flat => "b".to_string(),
-            Sharp => "#".to_string(),
-            DoubleFlat => "bb".to_string(),
-            DoubleSharp => "##".to_string(),
+            NoteAccidental::Flat => "b".to_string(),
+            NoteAccidental::Sharp => "#".to_string(),
+            NoteAccidental::DoubleFlat => "bb".to_string(),
+            NoteAccidental::DoubleSharp => "##".to_string(),
         }
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Note {
     // The letter of the note, like A/B/C
     letter: NoteLetter,
@@ -55,7 +57,7 @@ pub struct Note {
 // three note letters from Db. Critically, you can't use semitones for this task. For this reason,
 // we derive FromPrimitive to make arithmetic easier.
 #[derive(FromPrimitive, Copy, Clone)]
-enum NoteLetter {
+pub enum NoteLetter {
     C,
     D,
     E,
@@ -87,9 +89,9 @@ impl NoteLetter {
     // how many octaves the note went up by.
     fn advance_by(&self, number: i8) -> (Self, i8) {
         let new_letter_num = (*self as i8) + number;
-        let new_octaves = new_letter_num / NUM_NOTE_LETTERS;
+        let new_octaves = new_letter_num / NoteLetter::NUM_NOTE_LETTERS;
 
-        match num::FromPrimitive::from_i8(new_letter_num % NUM_NOTE_LETTERS) {
+        match num::FromPrimitive::from_i8(new_letter_num % NoteLetter::NUM_NOTE_LETTERS) {
             Some(note_letter) => (note_letter, new_octaves),
             None => panic!("Always should be able to advance a NoteLetter into another"),
         }
@@ -110,10 +112,6 @@ impl ToString for NoteLetter {
     }
 }
 
-// The size of NoteLetter. This should never change as long as we only support 12-tone equal
-// temperament.
-const NUM_NOTE_LETTERS: i8 = 7;
-
 impl Note {
     // Create a Note from a letter and accidental, with a default octave.
     pub fn new(letter: NoteLetter, accidental: NoteAccidental) -> Note {
@@ -125,15 +123,14 @@ impl Note {
     }
 
     pub fn ascending_scale(&self, scale: &Scale) -> Vec<Note> {
-        let scale_notes = &mut Vec::<Note>::with_capacity(scale.ascending.len());
+        let mut scale_notes = Vec::<Note>::with_capacity(scale.ascending.len());
 
-        let mut i = 0;
         for interval in scale.ascending.iter() {
             let scale_note = self.apply_interval(interval);
-            scale_notes[i] = scale_note;
+            scale_notes.push(scale_note)
         }
 
-        *scale_notes
+        scale_notes
     }
 
     fn semitone_value(&self) -> i8 {
@@ -172,7 +169,7 @@ impl Note {
 
     fn get_semitone_distance(&self, other: &Self) -> i8 {
         let our_value = self.semitone_value();
-        let other_value = self.semitone_value();
+        let other_value = other.semitone_value();
         return our_value - other_value;
     }
 }

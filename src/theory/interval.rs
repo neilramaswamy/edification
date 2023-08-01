@@ -1,4 +1,4 @@
-enum IntervalQuality {
+pub enum IntervalQuality {
     Perfect,
     Major,
     Minor,
