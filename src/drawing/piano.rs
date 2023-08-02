@@ -9,9 +9,25 @@ use crate::theory::{
     scale::CHROMATIC,
 };
 
+#[derive(Debug)]
+struct HighlightedNote {
+    note: Note,
+    color: HighlightColor,
+}
+
+impl HighlightedNote {
+    fn to_hex(&self) -> String {
+        match &self.color {
+            HighlightColor::Red => "#e74c3c".to_string(),
+            HighlightColor::Green => "#2ecc71".to_string(),
+            HighlightColor::Custom(hex) => hex.to_string(),
+        }
+    }
+}
+
 pub struct Piano {
     // A vector of all the higlighted notes on this piano.
-    highlighted: Vec<Note>,
+    highlighted: Vec<HighlightedNote>,
 
     // Width of the piano, in pixels
     width: f32,
@@ -19,6 +35,20 @@ pub struct Piano {
     // Height of the piano, in pixels. This is derivable from the width:
     // height = width * 0.877
     height: f32,
+
+    // The number of complete octaves to render, starting at C4
+    num_octaves: i8,
+
+    // The amount of horizontal/vertical padding on either side of the piano
+    padding_x: f32,
+    padding_y: f32,
+}
+
+#[derive(Debug)]
+pub enum HighlightColor {
+    Red,
+    Green,
+    Custom(String),
 }
 
 #[derive(Debug)]
@@ -28,37 +58,44 @@ pub enum PianoError {
 
 impl Piano {
     pub fn new() -> Self {
+        let num_octaves: i8 = 2;
+
         Piano {
             highlighted: vec![],
-            width: 1024.0,
-            height: 1024.0 * 0.877,
+            width: 256.0,
+            height: 256.0 * (0.877 / num_octaves as f32),
+            padding_x: 10.0,
+            padding_y: 20.0,
+            num_octaves,
         }
     }
 
     // Highlights a single note on the piano instance.
-    pub fn highlight_note(&mut self, note: &str) -> Result<(), PianoError> {
+    pub fn highlight_note(&mut self, note: &str, color: HighlightColor) -> Result<(), PianoError> {
         let note = Note::from_str(note).or_else(|err| match err {
             NoteParseError::InvalidFormat => Err(PianoError::InvalidNoteString),
         })?;
-        self.highlighted.push(note);
+        self.highlighted.push(HighlightedNote { note, color });
 
         Ok(())
     }
 
     // Renders the piano to the given filepath, returning a Result of the operation.
-    pub fn save(&self) {
+    pub fn save(&self, filepath: &str) {
         let document = self.render_piano();
 
-        svg::save("piano.svg", &document).unwrap();
+        svg::save(filepath, &document).unwrap();
     }
 
     fn render_piano(&self) -> Document {
-        let mut document =
-            Document::new().set("viewBox", (0, 0, self.width + 10.0, self.height + 10.0));
+        let true_height = self.width + (2.0 * self.padding_y) as f32;
+        let true_width = self.width + (2.0 * self.padding_x) as f32;
+
+        let mut document = Document::new().set("viewBox", (0, 0, true_width, true_height));
 
         // TODO: Support starting from an arbitrary note. For now, 2 octaves.
-        let notes = Note::from_str("C4").unwrap().ascending_scale(&CHROMATIC);
-        // notes.append(&mut Note::from_str("C5").unwrap().ascending_scale(&CHROMATIC));
+        let mut notes = Note::from_str("C4").unwrap().ascending_scale(&CHROMATIC);
+        notes.append(&mut Note::from_str("C5").unwrap().ascending_scale(&CHROMATIC));
 
         // To render the keyboard, we maintain a left_offset, which is the left-most point of the
         // last white key that we rendered.
@@ -69,7 +106,7 @@ impl Piano {
         //
         // If this algorithm seems arbitrary, it's because it is. Just convince yourself it works
         // by running an example.
-        let mut left_offset: f32 = 0.0;
+        let mut left_offset: f32 = self.padding_x;
 
         // We keep them in separate groups because SVG z-index is based on ordering in the XML.
         // When inserting these into the SVG, we'll insert the black group above the white group
@@ -81,7 +118,7 @@ impl Piano {
             let md = self.get_note_render_metadata(&note);
 
             let key_data = Data::new()
-                .move_to((left_offset + md.x_offset, 0))
+                .move_to((left_offset + md.x_offset, self.padding_y))
                 .line_by((0, md.height))
                 .line_by((md.width, 0))
                 .line_by((0, -md.height))
@@ -90,7 +127,6 @@ impl Piano {
             let path = Path::new()
                 .set("fill", md.visual_spec)
                 .set("stroke", "black")
-                .set("stroke-width", 3)
                 .set("d", key_data);
 
             // Finally, adjust the left offset
@@ -115,11 +151,9 @@ impl Piano {
 
         // TODO: When we support any number of keys, we'll have to update this octave-specific
         // logic.
-        let num_octaves = 1;
-
         let width = match note.key_color() {
-            KeyColor::White => self.width / (7.0 * num_octaves as f32),
-            KeyColor::Black => self.width / (12.0 * num_octaves as f32),
+            KeyColor::White => self.width / (7.0 * self.num_octaves as f32),
+            KeyColor::Black => self.width / (12.0 * self.num_octaves as f32),
         };
 
         let height = match note.key_color() {
@@ -128,27 +162,14 @@ impl Piano {
         };
 
         // TODO(neil): We should have a notion of enharmonic equality somewhere
-        let is_highlighted = self
+        let highlighted_note = self
             .highlighted
             .iter()
-            .find(|x| x.inter_octave_semitone_value() == note.inter_octave_semitone_value())
-            .is_some();
+            .find(|x| x.note.inter_octave_semitone_value() == note.inter_octave_semitone_value());
 
         let visual_spec = match note.key_color() {
-            KeyColor::White => {
-                if is_highlighted {
-                    "#DD0369".to_string()
-                } else {
-                    "white".to_string()
-                }
-            }
-            KeyColor::Black => {
-                if is_highlighted {
-                    "#C9035F".to_string()
-                } else {
-                    "black".to_string()
-                }
-            }
+            KeyColor::White => highlighted_note.map_or("white".to_string(), |v| v.to_hex()),
+            KeyColor::Black => highlighted_note.map_or("black".to_string(), |v| v.to_hex()),
         };
 
         let x_offset = match note.key_color() {
@@ -156,17 +177,19 @@ impl Piano {
             KeyColor::Black => {
                 // Eventually, we should do this off of note letter equivalence classes and not
                 // the intra octave semitones, because this is exceptionally jank.
+                let octave_width = self.width / self.num_octaves as f32;
+
                 match note.intra_octave_semitone_value() {
                     // Db
-                    1 => -self.width * 0.0518,
+                    1 => -octave_width * 0.0518,
                     // Eb
-                    3 => -self.width * 0.0251,
+                    3 => -octave_width * 0.0251,
                     // Gb
-                    6 => -self.width * 0.0584,
+                    6 => -octave_width * 0.0584,
                     // Ab
-                    8 => -self.width * 0.0384,
+                    8 => -octave_width * 0.0384,
                     // Bb
-                    10 => -self.width * 0.0184,
+                    10 => -octave_width * 0.0184,
                     _ => panic!("Black key found with invalid intra octave semitone value"),
                 }
             }

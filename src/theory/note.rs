@@ -93,6 +93,18 @@ impl Ord for Note {
     }
 }
 
+impl std::fmt::Display for Note {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut note_str = String::with_capacity(5);
+
+        note_str += &self.letter.to_string();
+        note_str += &self.accidental.to_string();
+        note_str += &self.octave.to_string();
+
+        write!(f, "{}", note_str)
+    }
+}
+
 // NoteLetter represents one of the 7 note letters.
 //
 // Arithmetic on NoteLetters is necessary to spell notes derived from intervals correctly. For
@@ -260,18 +272,6 @@ impl Note {
 #[derive(Debug, PartialEq, Eq)]
 pub enum NoteParseError {
     InvalidFormat,
-}
-
-impl ToString for Note {
-    fn to_string(&self) -> String {
-        let mut note_str = String::with_capacity(5);
-
-        note_str += &self.letter.to_string();
-        note_str += &self.accidental.to_string();
-        note_str += &self.octave.to_string();
-
-        note_str
-    }
 }
 
 impl FromStr for Note {

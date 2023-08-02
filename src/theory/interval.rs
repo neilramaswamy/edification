@@ -11,6 +11,9 @@ pub enum IntervalQuality {
 #[derive(Debug)]
 pub struct Interval {
     pub quality: IntervalQuality,
+
+    // The 0-indexed number of named notes in the Interval.
+    // A minor 2nd is 2, an augmented 7th is 7, etc.
     pub number: i8,
     pub semitones: i8,
 }
@@ -30,6 +33,7 @@ pub const MAJ2: Interval = Interval {
     number: 1,
     semitones: 2,
 };
+
 pub const AUG2: Interval = Interval {
     quality: IntervalQuality::Augmented,
     number: 1,
@@ -89,4 +93,45 @@ pub const OCT1: Interval = Interval {
     quality: IntervalQuality::Perfect,
     number: 7,
     semitones: 12,
+};
+
+// Tensions
+//
+// These are kept in the same octave (i.e. `semitone` isn't >= 12) because in Jazz, a T9 doesn't
+// mean "something that's a major 9th away".
+
+pub const T9: Interval = Interval {
+    quality: IntervalQuality::Major,
+    number: 1,
+    semitones: 2,
+};
+
+pub const TFLAT9: Interval = Interval {
+    quality: IntervalQuality::Minor,
+    number: 1,
+    semitones: 1,
+};
+
+pub const T11: Interval = Interval {
+    quality: IntervalQuality::Perfect,
+    number: 3,
+    semitones: 5,
+};
+
+pub const TSHARP11: Interval = Interval {
+    quality: IntervalQuality::Augmented,
+    number: 3,
+    semitones: 6,
+};
+
+pub const T13: Interval = Interval {
+    quality: IntervalQuality::Major,
+    number: 5,
+    semitones: 9,
+};
+
+pub const TFLAT13: Interval = Interval {
+    quality: IntervalQuality::Minor,
+    number: 5,
+    semitones: 8,
 };

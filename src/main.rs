@@ -1,14 +1,36 @@
+use std::{
+    fs::{self, create_dir, create_dir_all},
+    str::FromStr,
+};
+
+use drawing::piano::HighlightColor;
+use theory::{interval::TFLAT13, note::Note, scale::CHROMATIC};
+
 pub mod drawing;
 pub mod theory;
 
 fn main() {
-    println!("Because Rust is Turing complete and all my modules compile, that means my code is correct and will halt, via the Halting Theorem.");
+    let chromatic = Note::from_str("C").unwrap().ascending_scale(&CHROMATIC);
 
-    let mut piano = drawing::piano::Piano::new();
+    // Ensure that images/ exists
+    create_dir_all("images").unwrap();
 
-    piano.highlight_note("Fbb").unwrap();
-    piano.highlight_note("E4").unwrap();
-    piano.highlight_note("A##").unwrap();
+    for note in chromatic.iter() {
+        // For all of these, let's generate a piano with the Tb13
+        let path = format!("images/{note}-Tb13.svg");
 
-    piano.save();
+        let mut piano = drawing::piano::Piano::new();
+
+        piano
+            .highlight_note(&note.to_string(), HighlightColor::Red)
+            .unwrap();
+        piano
+            .highlight_note(
+                &note.apply_interval(&TFLAT13).to_string(),
+                HighlightColor::Green,
+            )
+            .unwrap();
+
+        piano.save(&path);
+    }
 }
