@@ -16,6 +16,12 @@ pub enum NoteAccidental {
     DoubleSharp,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum KeyColor {
+    White,
+    Black,
+}
+
 impl NoteAccidental {
     fn semitone_offset(&self) -> i8 {
         match self {
@@ -81,7 +87,9 @@ impl PartialOrd for Note {
 
 impl Ord for Note {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        return self.semitone_value().cmp(&other.semitone_value());
+        return self
+            .inter_octave_semitone_value()
+            .cmp(&other.inter_octave_semitone_value());
     }
 }
 
@@ -189,9 +197,28 @@ impl Note {
         scale_notes
     }
 
-    fn semitone_value(&self) -> i8 {
+    pub fn key_color(&self) -> KeyColor {
+        let intra_octave_semitone_value = self.intra_octave_semitone_value();
+
+        match intra_octave_semitone_value {
+            0 | 2 | 4 | 5 | 7 | 9 | 11 => KeyColor::White,
+            1 | 3 | 6 | 8 | 10 => KeyColor::Black,
+            _ => panic!(
+                "Octaveless semitone offset should never fall outside of [1, 12), got {}",
+                intra_octave_semitone_value
+            ),
+        }
+    }
+
+    pub fn inter_octave_semitone_value(&self) -> i8 {
         let octave_offset = 12 * self.octave;
+        // We do *not* apply % 12 to any part of this, because we want to overflow into the next
+        // octave if that's what the accidentals do.
         return octave_offset + self.letter.semitone_offset() + self.accidental.semitone_offset();
+    }
+
+    pub fn intra_octave_semitone_value(&self) -> i8 {
+        return (self.letter.semitone_offset() + self.accidental.semitone_offset()) % 12;
     }
 
     // ApplyInterval moves self by the given interval, and returns the resulting note.
@@ -224,8 +251,8 @@ impl Note {
     }
 
     fn get_semitone_distance(&self, other: &Self) -> i8 {
-        let our_value = dbg!(self.semitone_value());
-        let other_value = dbg!(other.semitone_value());
+        let our_value = self.inter_octave_semitone_value();
+        let other_value = other.inter_octave_semitone_value();
         return our_value - other_value;
     }
 }
@@ -233,7 +260,6 @@ impl Note {
 #[derive(Debug, PartialEq, Eq)]
 pub enum NoteParseError {
     InvalidFormat,
-    OutOfRange,
 }
 
 impl ToString for Note {
@@ -259,7 +285,7 @@ impl FromStr for Note {
             None => Err(NoteParseError::InvalidFormat),
             Some(captures) => {
                 let letter = NoteLetter::from_str(captures.get(1).unwrap().as_str()).unwrap();
-                let accidental = dbg!(captures.get(2)).map_or(NoteAccidental::None, |m| {
+                let accidental = captures.get(2).map_or(NoteAccidental::None, |m| {
                     NoteAccidental::from_str(m.as_str()).unwrap()
                 });
                 let octave = captures
@@ -278,10 +304,7 @@ impl FromStr for Note {
 
 #[cfg(test)]
 mod tests {
-    use crate::theory::{
-        interval::{MAJ2, MAJ3, MIN3, MIN6, MIN7, OCT1, PERF1, PERF4, PERF5},
-        scale::MIXO_FLAT13,
-    };
+    use crate::theory::interval::{MAJ2, MAJ3, MIN3, MIN6, MIN7, OCT1, PERF1, PERF4, PERF5};
 
     use super::*;
 
